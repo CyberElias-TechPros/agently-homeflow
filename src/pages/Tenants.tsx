@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Users, Mail, Phone, Calendar, DollarSign } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import RecordPaymentDialog from "@/components/RecordPaymentDialog";
 import { getAll, Tenant, Unit, Property, getById } from "@/lib/db";
 
 export default function Tenants() {
+  const navigate = useNavigate();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [units, setUnits] = useState<Map<string, Unit>>(new Map());
   const [properties, setProperties] = useState<Map<string, Property>>(new Map());
@@ -166,12 +169,21 @@ export default function Tenants() {
                       </div>
 
                       <div className="flex gap-2 pt-2">
-                        <button className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-muted hover:bg-muted/80 transition-colors">
+                        <button 
+                          className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-muted hover:bg-muted/80 transition-colors"
+                          onClick={() => navigate(`/tenants/${tenant.id}`)}
+                        >
                           View Details
                         </button>
-                        <button className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-gradient-secondary text-secondary-foreground hover:opacity-90 transition-opacity">
-                          Record Payment
-                        </button>
+                        <RecordPaymentDialog 
+                          tenant={tenant} 
+                          onSuccess={loadTenants}
+                          trigger={
+                            <button className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-gradient-secondary text-secondary-foreground hover:opacity-90 transition-opacity">
+                              Record Payment
+                            </button>
+                          }
+                        />
                       </div>
                     </CardContent>
                   </Card>

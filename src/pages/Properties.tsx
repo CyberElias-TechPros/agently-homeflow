@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Building2, Home, Briefcase, Store } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import AddPropertyDialog from "@/components/AddPropertyDialog";
 import { getAll, Property, Unit, getByIndex } from "@/lib/db";
 
 export default function Properties() {
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [unitsMap, setUnitsMap] = useState<Map<string, Unit[]>>(new Map());
 
@@ -61,10 +64,7 @@ export default function Properties() {
               Manage your property portfolio
             </p>
           </div>
-          <Button className="bg-gradient-secondary">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Property
-          </Button>
+          <AddPropertyDialog onSuccess={loadProperties} />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -154,7 +154,11 @@ export default function Properties() {
                     </div>
                   </div>
 
-                  <Button variant="outline" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => navigate(`/properties/${property.id}`)}
+                  >
                     View Details
                   </Button>
                 </CardContent>
