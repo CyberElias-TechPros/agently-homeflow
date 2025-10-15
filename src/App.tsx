@@ -3,6 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./pages/Login";
 import Index from "./pages/Index";
 import Properties from "./pages/Properties";
 import PropertyDetails from "./pages/PropertyDetails";
@@ -13,6 +16,11 @@ import Expenses from "./pages/Expenses";
 import Maintenance from "./pages/Maintenance";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Applications from "./pages/Applications";
+import Listings from "./pages/Listings";
+import Leads from "./pages/Leads";
+import Jobs from "./pages/Jobs";
+import Academy from "./pages/Academy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,20 +31,27 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/properties" element={<Properties />} />
-          <Route path="/properties/:id" element={<PropertyDetails />} />
-          <Route path="/tenants" element={<Tenants />} />
-          <Route path="/tenants/:id" element={<TenantDetails />} />
-          <Route path="/payments" element={<Payments />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/properties" element={<ProtectedRoute><Properties /></ProtectedRoute>} />
+            <Route path="/properties/:id" element={<ProtectedRoute><PropertyDetails /></ProtectedRoute>} />
+            <Route path="/tenants" element={<ProtectedRoute allowedRoles={["owner", "manager"]}><Tenants /></ProtectedRoute>} />
+            <Route path="/tenants/:id" element={<ProtectedRoute><TenantDetails /></ProtectedRoute>} />
+            <Route path="/applications" element={<ProtectedRoute allowedRoles={["manager", "owner"]}><Applications /></ProtectedRoute>} />
+            <Route path="/listings" element={<ProtectedRoute allowedRoles={["realtor"]}><Listings /></ProtectedRoute>} />
+            <Route path="/leads" element={<ProtectedRoute allowedRoles={["realtor"]}><Leads /></ProtectedRoute>} />
+            <Route path="/jobs" element={<ProtectedRoute allowedRoles={["contractor"]}><Jobs /></ProtectedRoute>} />
+            <Route path="/academy" element={<ProtectedRoute allowedRoles={["realtor"]}><Academy /></ProtectedRoute>} />
+            <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+            <Route path="/expenses" element={<ProtectedRoute allowedRoles={["owner", "accountant", "manager"]}><Expenses /></ProtectedRoute>} />
+            <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute allowedRoles={["owner", "accountant", "admin"]}><Analytics /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

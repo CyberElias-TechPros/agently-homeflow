@@ -1,6 +1,6 @@
 // IndexedDB utilities for Agently Landlord
 const DB_NAME = "agently_landlord";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface Property {
   id: string;
@@ -78,6 +78,93 @@ export interface Expense {
   createdAt: string;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  password: string; // In real app, this would be hashed
+  firstName: string;
+  lastName: string;
+  phone: string;
+  role: "owner" | "manager" | "accountant" | "tenant" | "realtor" | "contractor" | "admin";
+  avatar?: string;
+  kycStatus: "pending" | "verified" | "rejected";
+  createdAt: string;
+}
+
+export interface PaymentPlan {
+  id: string;
+  tenantId: string;
+  leaseId: string;
+  totalAmount: number;
+  installments: {
+    id: string;
+    dueDate: string;
+    amount: number;
+    paid: boolean;
+    paidAt?: string;
+    paymentId?: string;
+  }[];
+  status: "pending" | "approved" | "rejected" | "active" | "completed";
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Application {
+  id: string;
+  applicantId: string;
+  propertyId: string;
+  unitId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  employmentStatus: string;
+  monthlyIncome: number;
+  moveInDate: string;
+  references: string;
+  kycDocuments: string[];
+  status: "pending" | "screening" | "approved" | "rejected";
+  score?: number;
+  reviewedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Listing {
+  id: string;
+  propertyId: string;
+  unitId: string;
+  agentId: string;
+  title: string;
+  description: string;
+  rent: number;
+  images: string[];
+  virtualTourUrl?: string;
+  featured: boolean;
+  status: "draft" | "pending_verification" | "published" | "taken";
+  verifiedBy?: string;
+  views: number;
+  leads: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Lead {
+  id: string;
+  listingId: string;
+  agentId: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  status: "new" | "contacted" | "viewing_scheduled" | "negotiation" | "converted" | "lost";
+  scheduledViewing?: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 let db: IDBDatabase | null = null;
 
 export async function initDB(): Promise<IDBDatabase> {
@@ -121,6 +208,31 @@ export async function initDB(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains("expenses")) {
         const expenseStore = database.createObjectStore("expenses", { keyPath: "id" });
         expenseStore.createIndex("propertyId", "propertyId", { unique: false });
+      }
+      if (!database.objectStoreNames.contains("users")) {
+        const userStore = database.createObjectStore("users", { keyPath: "id" });
+        userStore.createIndex("email", "email", { unique: true });
+        userStore.createIndex("role", "role", { unique: false });
+      }
+      if (!database.objectStoreNames.contains("payment_plans")) {
+        const planStore = database.createObjectStore("payment_plans", { keyPath: "id" });
+        planStore.createIndex("tenantId", "tenantId", { unique: false });
+        planStore.createIndex("status", "status", { unique: false });
+      }
+      if (!database.objectStoreNames.contains("applications")) {
+        const appStore = database.createObjectStore("applications", { keyPath: "id" });
+        appStore.createIndex("unitId", "unitId", { unique: false });
+        appStore.createIndex("status", "status", { unique: false });
+      }
+      if (!database.objectStoreNames.contains("listings")) {
+        const listingStore = database.createObjectStore("listings", { keyPath: "id" });
+        listingStore.createIndex("agentId", "agentId", { unique: false });
+        listingStore.createIndex("status", "status", { unique: false });
+      }
+      if (!database.objectStoreNames.contains("leads")) {
+        const leadStore = database.createObjectStore("leads", { keyPath: "id" });
+        leadStore.createIndex("agentId", "agentId", { unique: false });
+        leadStore.createIndex("listingId", "listingId", { unique: false });
       }
     };
   });

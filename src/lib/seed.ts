@@ -1,8 +1,101 @@
 // Seed data for demo purposes
-import { add, Property, Unit, Tenant, Payment, MaintenanceRequest, Expense } from "./db";
+import { initDB, add, getAll, Property, Unit, Tenant, Payment, MaintenanceRequest, Expense, User } from "./db";
 
 export async function seedDemoData() {
   try {
+    await initDB();
+
+    // Check if data already exists
+    const existingUsers = await getAll<User>("users");
+    if (existingUsers.length > 0) {
+      console.log("Database already seeded");
+      return;
+    }
+
+    // Seed Users first
+    const users: User[] = [
+      {
+        id: "user-owner-1",
+        email: "owner@agently.com",
+        password: "owner123",
+        firstName: "John",
+        lastName: "Landlord",
+        phone: "+234-801-234-5678",
+        role: "owner",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-manager-1",
+        email: "manager@agently.com",
+        password: "manager123",
+        firstName: "Sarah",
+        lastName: "Manager",
+        phone: "+234-802-234-5678",
+        role: "manager",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-accountant-1",
+        email: "accountant@agently.com",
+        password: "accountant123",
+        firstName: "Michael",
+        lastName: "Finance",
+        phone: "+234-803-234-5678",
+        role: "accountant",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-tenant-1",
+        email: "tenant@agently.com",
+        password: "tenant123",
+        firstName: "Alice",
+        lastName: "Tenant",
+        phone: "+234-804-234-5678",
+        role: "tenant",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-realtor-1",
+        email: "realtor@agently.com",
+        password: "realtor123",
+        firstName: "David",
+        lastName: "Agent",
+        phone: "+234-805-234-5678",
+        role: "realtor",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-contractor-1",
+        email: "contractor@agently.com",
+        password: "contractor123",
+        firstName: "James",
+        lastName: "Handyman",
+        phone: "+234-806-234-5678",
+        role: "contractor",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "user-admin-1",
+        email: "admin@agently.com",
+        password: "admin123",
+        firstName: "Admin",
+        lastName: "User",
+        phone: "+234-807-234-5678",
+        role: "admin",
+        kycStatus: "verified",
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    for (const user of users) {
+      await add<User>("users", user);
+    }
     // Sample Properties
     const properties: Property[] = [
       {
@@ -283,6 +376,9 @@ export async function seedDemoData() {
     ];
 
     // Add all data to IndexedDB
+    for (const user of users) {
+      await add("users", user);
+    }
     for (const property of properties) {
       await add("properties", property);
     }
