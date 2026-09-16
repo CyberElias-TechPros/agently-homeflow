@@ -1,247 +1,128 @@
 import { useEffect, useState } from "react";
-import { Check, X, UserCheck } from "lucide-react";
-import Layout from "@/components/Layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClipboardList, Search, Check, X, Clock, User, Mail, DollarSign, Calendar, ArrowUpRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getAll, Application, Property, Unit, getById, update } from "@/lib/db";
-import { useToast } from "@/hooks/use-toast";
+import { apiClient } from "@/lib/api";
+import { getAll, Application } from "@/lib/db";
+import { motion } from "framer-motion";
 
 export default function Applications() {
   const [applications, setApplications] = useState<Application[]>([]);
-  const [properties, setProperties] = useState<Map<string, Property>>(new Map());
-  const [units, setUnits] = useState<Map<string, Unit>>(new Map());
-  const [activeTab, setActiveTab] = useState("pending");
-  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("all");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadApplications();
-  }, []);
+  useEffect(() => { loadApplications(); }, []);
+  useEffect(() => { const t = setTimeout(loadApplications, 300); return () => clearTimeout(t); }, [search, activeTab]);
 
   async function loadApplications() {
-    const apps = await getAll<Application>("applications");
-    setApplications(apps);
-
-    const propsMap = new Map<string, Property>();
-    const unitsMap = new Map<string, Unit>();
-
-    for (const app of apps) {
-      const property = await getById<Property>("properties", app.propertyId);
-      const unit = await getById<Unit>("units", app.unitId);
-      if (property) propsMap.set(property.id, property);
-      if (unit) unitsMap.set(unit.id, unit);
-    }
-
-    setProperties(propsMap);
-    setUnits(unitsMap);
-  }
-
-  async function handleStatusUpdate(app: Application, newStatus: Application["status"]) {
+    setLoading(true);
     try {
-      const updated: Application = {
-        ...app,
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      await update<Application>("applications", updated);
-      
-      toast({
-        title: "Application updated",
-        description: `Application has been ${newStatus}`,
-      });
-      
-      loadApplications();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update application",
-        variant: "destructive",
-      });
-    }
+      try {
+        const res = await apiClient.getApplications({ status: activeTab !== "all" ? activeTab : undefined });
+        if (res.success) {
+          const mapped = res.data.map((a: any) => ({
+            id: a.id,
+            firstName: a.firstName,
+            lastName: a.lastName,
+            email: a.email,
+            phone: a.phone,
+            propertyId: a.propertyId,
+            unitId: a.unitId,
+            status: a.status,
+            monthlyIncome: a.monthlyIncome,
+            moveInDate: a.moveInDate,
+            employmentStatus: a.employmentStatus,
+            createdAt: a.createdAt,
+            // @ts-ignore
+            _raw: a,
+          }));
+          setApplications(mapped);
+          setLoading(false);
+          return;
+        }
+      } catch {}
+      const data = await getAll<Application>("applications");
+      setApplications(data);
+    } finally { setLoading(false); }
   }
 
-  const filteredApps = activeTab === "all" 
-    ? applications 
-    : applications.filter(a => a.status === activeTab);
+  async function handleStatus(id: string, status: string) {
+    try {
+      const res = await apiClient.updateApplication(id, { status });
+      if (res.success) loadApplications();
+    } catch (e) { console.error(e); }
+  }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: "NGN",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const filtered = applications.filter(a => {
+    if (activeTab !== "all" && a.status !== activeTab) return false;
+    if (search && !`${a.firstName} ${a.lastName} ${a.email}`.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const counts = {
+    all: applications.length,
+    pending: applications.filter(a => a.status === "pending").length,
+    screening: applications.filter(a => a.status === "screening").length,
+    approved: applications.filter(a => a.status === "approved").length,
+    rejected: applications.filter(a => a.status === "rejected").length,
   };
 
+  if (loading) return <div className="h-[400px] rounded-[20px] bg-muted animate-pulse" />;
+
   return (
-    <Layout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tenant Applications</h1>
-          <p className="text-muted-foreground">Review and process tenant applications</p>
+    <div className="space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background"><ClipboardList className="h-4 w-4" /></div><span className="mono text-[11px] uppercase tracking-[0.14em] opacity-60">{applications.length} applications • {counts.pending} pending</span></div>
+          <div><h1 className="font-[Fraunces] text-[40px] lg:text-[48px] font-bold leading-[0.9] tracking-[-0.03em]">Applications</h1><p className="text-[15px] opacity-60 mt-3 max-w-[48ch]">New leases, screened. Approve, reject, or request more info — all in one flow.</p></div>
         </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="all">All ({applications.length})</TabsTrigger>
-            <TabsTrigger value="pending">
-              Pending ({applications.filter(a => a.status === "pending").length})
-            </TabsTrigger>
-            <TabsTrigger value="screening">
-              Screening ({applications.filter(a => a.status === "screening").length})
-            </TabsTrigger>
-            <TabsTrigger value="approved">
-              Approved ({applications.filter(a => a.status === "approved").length})
-            </TabsTrigger>
-            <TabsTrigger value="rejected">
-              Rejected ({applications.filter(a => a.status === "rejected").length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-6">
-            <div className="grid gap-4">
-              {filteredApps.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <UserCheck className="h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No applications found</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                filteredApps.map((app) => {
-                  const property = properties.get(app.propertyId);
-                  const unit = units.get(app.unitId);
-
-                  return (
-                    <Card key={app.id}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-xl">
-                              {app.firstName} {app.lastName}
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {property?.name} - Unit {unit?.unitNumber}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              app.status === "approved"
-                                ? "default"
-                                : app.status === "rejected"
-                                ? "destructive"
-                                : "secondary"
-                            }
-                            className={
-                              app.status === "approved"
-                                ? "bg-success text-success-foreground"
-                                : ""
-                            }
-                          >
-                            {app.status}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Email</p>
-                            <p className="font-medium">{app.email}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Phone</p>
-                            <p className="font-medium">{app.phone}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Employment</p>
-                            <p className="font-medium">{app.employmentStatus}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Monthly Income</p>
-                            <p className="font-medium">{formatCurrency(app.monthlyIncome)}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Move-in Date</p>
-                            <p className="font-medium">
-                              {new Date(app.moveInDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                          {app.score && (
-                            <div>
-                              <p className="text-muted-foreground">Score</p>
-                              <p className="font-medium">{app.score}/100</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {app.references && (
-                          <div>
-                            <p className="text-sm text-muted-foreground mb-1">References</p>
-                            <p className="text-sm">{app.references}</p>
-                          </div>
-                        )}
-
-                        {app.status === "pending" && (
-                          <div className="flex gap-2 pt-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStatusUpdate(app, "screening")}
-                              className="flex-1"
-                            >
-                              <UserCheck className="mr-2 h-4 w-4" />
-                              Start Screening
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleStatusUpdate(app, "approved")}
-                              className="flex-1 bg-success hover:bg-success/90"
-                            >
-                              <Check className="mr-2 h-4 w-4" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleStatusUpdate(app, "rejected")}
-                              className="flex-1"
-                            >
-                              <X className="mr-2 h-4 w-4" />
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-
-                        {app.status === "screening" && (
-                          <div className="flex gap-2 pt-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleStatusUpdate(app, "approved")}
-                              className="flex-1 bg-success hover:bg-success/90"
-                            >
-                              <Check className="mr-2 h-4 w-4" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleStatusUpdate(app, "rejected")}
-                              className="flex-1"
-                            >
-                              <X className="mr-2 h-4 w-4" />
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
       </div>
-    </Layout>
+
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 opacity-40" /><Input placeholder="Search applicants..." value={search} onChange={e => setSearch(e.target.value)} className="h-11 rounded-full pl-11 bg-card border-border/50" /></div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto"><TabsList className="rounded-full bg-muted/70 p-1 h-11 w-full lg:w-auto grid grid-cols-5"><TabsTrigger value="all" className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background">All ({counts.all})</TabsTrigger><TabsTrigger value="pending" className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background">Pending ({counts.pending})</TabsTrigger><TabsTrigger value="screening" className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background">Screening</TabsTrigger><TabsTrigger value="approved" className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background">Approved</TabsTrigger><TabsTrigger value="rejected" className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background">Rejected</TabsTrigger></TabsList></Tabs>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filtered.map((app, idx) => {
+          const raw = (app as any)._raw;
+          return (
+            <motion.div key={app.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }} whileHover={{ y: -2 }}>
+              <Card className="rounded-[20px] border-border/50 hover:shadow-lg transition-all">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted"><User className="h-5 w-5 opacity-60" /></div><div><CardTitle className="text-[16px] leading-tight">{app.firstName} {app.lastName}</CardTitle><CardDescription className="mono text-[11px] mt-1">{raw?.propertyName} • Unit {raw?.unitNumber}</CardDescription></div></div>
+                    <Badge className={`rounded-full mono text-[10px] uppercase tracking-widest border-0 ${app.status === "approved" ? "bg-success text-success-foreground" : app.status === "rejected" ? "bg-destructive text-destructive-foreground" : app.status === "screening" ? "bg-warning text-warning-foreground" : "bg-muted text-muted-foreground"}`}>{app.status}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2 text-[13px]">
+                    <div className="flex items-center gap-2 opacity-70"><Mail className="h-3.5 w-3.5" />{app.email}</div>
+                    <div className="flex items-center gap-2 opacity-70"><DollarSign className="h-3.5 w-3.5" />₦{app.monthlyIncome?.toLocaleString()} / month • {app.employmentStatus}</div>
+                    <div className="flex items-center gap-2 opacity-70"><Calendar className="h-3.5 w-3.5" />Move-in: {app.moveInDate ? new Date(app.moveInDate).toLocaleDateString() : "ASAP"}</div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    {app.status === "pending" || app.status === "screening" ? (
+                      <>
+                        <Button size="sm" className="flex-1 rounded-full bg-success text-success-foreground hover:bg-success/90 h-9" onClick={() => handleStatus(app.id, "approved")}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
+                        <Button size="sm" variant="outline" className="flex-1 rounded-full h-9" onClick={() => handleStatus(app.id, "rejected")}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="outline" className="w-full rounded-full h-9">View details <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && <Card className="rounded-[24px] border-dashed bg-muted/20"><CardContent className="py-16 text-center"><ClipboardList className="h-12 w-12 mx-auto opacity-20 mb-4" /><h3 className="font-[Fraunces] text-[20px] font-bold">No applications</h3><p className="mono text-[12px] opacity-60 mt-1">New tenant applications will appear here</p></CardContent></Card>}
+    </div>
   );
 }
