@@ -1,0 +1,28 @@
+name = "agently-homeflow-api"
+main = "worker/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+JWT_SECRET = "agently-super-secret-jwt-key-change-in-production-32chars!"
+FRONTEND_URL = "http://localhost:8080"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agently-homeflow-db"
+database_id = "local-dev-db"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "agently-homeflow-storage"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "local-cache-id"
+
+[dev]
+port = 8787
+
+[observability]
+enabled = true

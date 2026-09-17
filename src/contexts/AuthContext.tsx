@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { apiClient } from "@/lib/api";
 import { User, getAll, getById, initDB } from "@/lib/db";
 
 interface AuthContextType {
@@ -6,12 +7,12 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  register?: (data: any) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fallback demo users for when database is empty or corrupted
-const DEMO_USERS = [
+const DEMO_USERS: User[] = [
   {
     id: "demo-admin",
     email: "admin@agently.com",
@@ -91,6 +92,21 @@ const DEMO_USERS = [
   },
 ];
 
+function mapApiUserToLocal(apiUser: any): User {
+  return {
+    id: apiUser.id,
+    email: apiUser.email,
+    password: "", // Don't store password
+    firstName: apiUser.firstName,
+    lastName: apiUser.lastName,
+    phone: apiUser.phone || "",
+    role: apiUser.role,
+    kycStatus: apiUser.kycStatus || "verified",
+    avatar: apiUser.avatar,
+    createdAt: apiUser.createdAt,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,112 +116,142 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function checkAuth() {
-    console.log("🔐 Checking existing authentication...");
-    const userId = localStorage.getItem("currentUserId");
-    console.log("👤 Stored userId:", userId);
+    try {
+      const token = apiClient.getToken();
+      const storedUser = localStorage.getItem("agently_user");
+      const userId = localStorage.getItem("currentUserId");
 
-    if (userId) {
-      try {
-        // Try to get user from database first
-        const userData = await getById<User>("users", userId);
-        if (userData) {
-          console.log("✅ User authenticated from database:", userData.email);
-          setUser(userData);
-        } else {
-          // Fallback: check if it's a demo user
-          const demoUser = DEMO_USERS.find(u => u.id === userId);
-          if (demoUser) {
-            console.log("✅ Demo user authenticated from fallback:", demoUser.email);
-            setUser(demoUser);
+      if (token) {
+        try {
+          // Try API first
+          const response = await apiClient.getMe();
+          if (response.success) {
+            const mapped = mapApiUserToLocal(response.data);
+            setUser(mapped);
+            setIsLoading(false);
+            return;
+          }
+        } catch (error: any) {
+          if (error.message === 'API_UNAVAILABLE') {
+            console.warn("API unavailable, falling back to local storage");
           } else {
-            console.log("⚠️ Stored userId not found, clearing storage");
-            localStorage.removeItem("currentUserId");
+            console.warn("API auth failed, trying fallback:", error.message);
+            // Token invalid, clear it
+            if (error.message.includes('Unauthorized') || error.message.includes('Invalid token')) {
+              apiClient.logout();
+            }
           }
         }
-      } catch (error) {
-        console.error("❌ Auth check failed, trying demo users:", error);
-        // Fallback to demo users if database fails
+      }
+
+      // Fallback to local storage / IndexedDB
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          setUser(mapApiUserToLocal(parsed));
+          setIsLoading(false);
+          return;
+        } catch {}
+      }
+
+      if (userId) {
+        try {
+          await initDB();
+          const userData = await getById<User>("users", userId);
+          if (userData) {
+            setUser(userData);
+            setIsLoading(false);
+            return;
+          }
+        } catch {}
+
         const demoUser = DEMO_USERS.find(u => u.id === userId);
         if (demoUser) {
-          console.log("✅ Demo user authenticated after DB error:", demoUser.email);
           setUser(demoUser);
-        } else {
-          localStorage.removeItem("currentUserId");
+          setIsLoading(false);
+          return;
         }
       }
-    } else {
-      console.log("ℹ️ No stored userId found");
+    } catch (error) {
+      console.error("Auth check error:", error);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }
 
   async function login(email: string, password: string): Promise<boolean> {
     try {
-      console.log("🔑 Attempting login for:", email);
+      // Try API login first
+      try {
+        const response = await apiClient.login(email, password);
+        if (response.success) {
+          const mapped = mapApiUserToLocal(response.data.user);
+          setUser(mapped);
+          return true;
+        }
+      } catch (error: any) {
+        if (error.message !== 'API_UNAVAILABLE') {
+          console.warn("API login failed, trying local fallback:", error.message);
+        }
+        // If API unavailable, try local fallback
+      }
 
-      // First try to get users from database
-      let users: User[] = [];
+      // Fallback to IndexedDB / demo users
       try {
         await initDB();
-        users = await getAll<User>("users");
-        console.log(`✅ Found ${users.length} users in database`);
-      } catch (error) {
-        console.warn("⚠️ Database unavailable, using demo users only:", error);
-      }
-
-      // Check database users first
-      let foundUser = users.find(
-        (u) => u.email === email && u.password === password
-      );
-
-      // If not found in database, check demo users
-      if (!foundUser) {
-        foundUser = DEMO_USERS.find(
-          (u) => u.email === email && u.password === password
-        );
-        if (foundUser) {
-          console.log("✅ Demo user found, login successful:", foundUser.email);
+        const users = await getAll<User>("users");
+        let foundUser = users.find(u => u.email === email && u.password === password);
+        if (!foundUser) {
+          foundUser = DEMO_USERS.find(u => u.email === email && u.password === password);
         }
-      } else {
-        console.log("✅ Database user found, login successful:", foundUser.email);
+        if (foundUser) {
+          setUser(foundUser);
+          localStorage.setItem("currentUserId", foundUser.id);
+          localStorage.setItem("agently_user", JSON.stringify(foundUser));
+          return true;
+        }
+      } catch (dbError) {
+        console.warn("DB login failed, trying demo users only:", dbError);
+        const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
+        if (demoUser) {
+          setUser(demoUser);
+          localStorage.setItem("currentUserId", demoUser.id);
+          localStorage.setItem("agently_user", JSON.stringify(demoUser));
+          return true;
+        }
       }
 
-      if (foundUser) {
-        setUser(foundUser);
-        localStorage.setItem("currentUserId", foundUser.id);
-        return true;
-      } else {
-        console.log("❌ Login failed - no matching user found");
-        console.log("🔍 Available users:");
-        [...users, ...DEMO_USERS].forEach(u => console.log(`   - ${u.email} (${u.role})`));
-        return false;
-      }
+      return false;
     } catch (error) {
-      console.error("❌ Login error:", error);
+      console.error("Login error:", error);
+      return false;
+    }
+  }
 
-      // Final fallback: try demo users even if everything fails
-      const fallbackUser = DEMO_USERS.find(
-        (u) => u.email === email && u.password === password
-      );
-
-      if (fallbackUser) {
-        console.log("✅ Fallback demo user login successful:", fallbackUser.email);
-        setUser(fallbackUser);
-        localStorage.setItem("currentUserId", fallbackUser.id);
+  async function register(data: { email: string; password: string; firstName: string; lastName: string; phone?: string; role?: string }): Promise<boolean> {
+    try {
+      const response = await apiClient.register(data);
+      if (response.success) {
+        const mapped = mapApiUserToLocal(response.data.user);
+        setUser(mapped);
         return true;
       }
-
+      return false;
+    } catch (error) {
+      console.error("Register error:", error);
       return false;
     }
   }
 
   function logout() {
+    apiClient.logout();
     setUser(null);
     localStorage.removeItem("currentUserId");
+    localStorage.removeItem("agently_user");
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading, register }}>
       {children}
     </AuthContext.Provider>
   );
@@ -218,3 +264,5 @@ export function useAuth() {
   }
   return context;
 }
+
+export { DEMO_USERS };
