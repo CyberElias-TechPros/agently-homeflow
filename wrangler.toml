@@ -5,13 +5,13 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
-JWT_SECRET = "agently-super-secret-jwt-key-change-in-production-32chars!"
-FRONTEND_URL = "http://localhost:8080"
+FRONTEND_URL = "https://agently-homeflow.vercel.app"
+# JWT_SECRET is a Cloudflare secret (wrangler secret put JWT_SECRET) — never commit it here.
 
 [[d1_databases]]
 binding = "DB"
 database_name = "agently-homeflow-db"
-database_id = "local-dev-db"
+database_id = "d87c72ce-fd21-41b5-ac58-7bbad23307b7"
 
 [[r2_buckets]]
 binding = "STORAGE"
@@ -19,7 +19,7 @@ bucket_name = "agently-homeflow-storage"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "local-cache-id"
+id = "c0802226aa1c48ce918aea1ce69896b4"
 
 [dev]
 port = 8787
